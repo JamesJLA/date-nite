@@ -1,9 +1,19 @@
 import uuid
 
+from django.contrib.auth import get_user_model
 from django.db import models
+
+User = get_user_model()
 
 
 class Plan(models.Model):
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_date_plans",
+    )
     inviter_email = models.EmailField()
     invitee_email = models.EmailField()
     city = models.CharField(max_length=120, blank=True)
@@ -24,6 +34,13 @@ class Participant(models.Model):
 
     plan = models.ForeignKey(
         Plan, on_delete=models.CASCADE, related_name="participants"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="date_participations",
     )
     email = models.EmailField()
     role = models.CharField(max_length=16, choices=ROLE_CHOICES)

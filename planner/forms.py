@@ -1,6 +1,10 @@
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 
 from .models import Vote
+
+User = get_user_model()
 
 
 class CreatePlanForm(forms.Form):
@@ -60,3 +64,29 @@ class RefinePlanForm(forms.Form):
             }
         ),
     )
+
+
+class SignUpForm(UserCreationForm):
+    email = forms.EmailField(
+        label="Email",
+        widget=forms.EmailInput(attrs={"placeholder": "you@example.com"}),
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ("email", "password1", "password2")
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("An account already exists for this email.")
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        email = self.cleaned_data["email"]
+        user.email = email
+        user.username = email
+        if commit:
+            user.save()
+        return user

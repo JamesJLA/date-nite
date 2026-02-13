@@ -1,11 +1,14 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from planner.models import Participant, Plan, Vote
 from planner.views import _format_story
+
+User = get_user_model()
 
 
 class FormatStoryTests(TestCase):
@@ -28,7 +31,53 @@ class FormatStoryTests(TestCase):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class PlannerViewTests(TestCase):
+    def _create_plan_with_participants(self):
+        plan = Plan.objects.create(
+            inviter_email="inviter@example.com",
+            invitee_email="invitee@example.com",
+        )
+        inviter = Participant.objects.create(
+            plan=plan,
+            email=plan.inviter_email,
+            role=Participant.INVITER,
+        )
+        invitee = Participant.objects.create(
+            plan=plan,
+            email=plan.invitee_email,
+            role=Participant.INVITEE,
+        )
+        return plan, inviter, invitee
+
+    def _create_votes_for_both(self, inviter, invitee):
+        Vote.objects.create(
+            participant=inviter,
+            dinner_choice="italian",
+            activity_choice="movie",
+            sweet_choice="dessert",
+            budget_choice="mid",
+        )
+        Vote.objects.create(
+            participant=invitee,
+            dinner_choice="sushi",
+            activity_choice="music",
+            sweet_choice="coffee",
+            budget_choice="cozy",
+        )
+
+    def test_home_requires_login(self):
+        response = self.client.get(reverse("planner:home"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("planner:login"), response.url)
+
     def test_home_post_creates_plan_sends_email_and_redirects(self):
+        user = User.objects.create_user(
+            username="me@example.com",
+            email="me@example.com",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
         response = self.client.post(
             reverse("planner:home"),
             {
@@ -46,6 +95,27 @@ class PlannerViewTests(TestCase):
         self.assertRedirects(response, reverse("planner:vote", args=[inviter.token]))
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [invitee.email])
+
+    def test_home_post_rejects_mismatched_inviter_email(self):
+        user = User.objects.create_user(
+            username="owner@example.com",
+            email="owner@example.com",
+            password="test-pass-123",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("planner:home"),
+            {
+                "inviter_email": "not-owner@example.com",
+                "invitee_email": "partner@example.com",
+                "city": "Seattle, WA",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Use the same email as your account")
+        self.assertEqual(Plan.objects.count(), 0)
 
     def test_vote_post_saves_vote_and_clears_existing_ai_summary(self):
         plan = Plan.objects.create(
@@ -66,6 +136,11 @@ class PlannerViewTests(TestCase):
                 "activity_choice": "movie",
                 "sweet_choice": "dessert",
                 "budget_choice": "mid",
+                "mood_choice": "classic",
+                "duration_choice": "half",
+                "transport_choice": "mixed",
+                "dietary_notes": "",
+                "accessibility_notes": "",
             },
         )
 
@@ -74,26 +149,65 @@ class PlannerViewTests(TestCase):
         plan.refresh_from_db()
         self.assertEqual(plan.ai_summary, "")
 
+    def test_vote_get_claims_participant_for_matching_user_email(self):
+        user = User.objects.create_user(
+            username="inviter@example.com",
+            email="inviter@example.com",
+            password="test-pass-123",
+        )
+        plan, inviter, _invitee = self._create_plan_with_participants()
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("planner:vote", args=[inviter.token]))
+
+        self.assertEqual(response.status_code, 200)
+        inviter.refresh_from_db()
+        plan.refresh_from_db()
+        self.assertEqual(inviter.user_id, user.id)
+        self.assertEqual(plan.created_by_id, user.id)
+
+    def test_vote_get_redirects_to_login_for_claimed_invite_when_logged_out(self):
+        owner = User.objects.create_user(
+            username="owner@example.com",
+            email="owner@example.com",
+            password="test-pass-123",
+        )
+        plan, inviter, _invitee = self._create_plan_with_participants()
+        inviter.user = owner
+        inviter.save(update_fields=["user"])
+
+        response = self.client.get(reverse("planner:vote", args=[inviter.token]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("planner:login"), response.url)
+
+    def test_vote_get_redirects_home_for_wrong_logged_in_user(self):
+        owner = User.objects.create_user(
+            username="owner@example.com",
+            email="owner@example.com",
+            password="test-pass-123",
+        )
+        stranger = User.objects.create_user(
+            username="stranger@example.com",
+            email="stranger@example.com",
+            password="test-pass-123",
+        )
+        _plan, inviter, _invitee = self._create_plan_with_participants()
+        inviter.user = owner
+        inviter.save(update_fields=["user"])
+        self.client.force_login(stranger)
+
+        response = self.client.get(reverse("planner:vote", args=[inviter.token]))
+
+        self.assertRedirects(response, reverse("planner:home"))
+
     @override_settings(ENABLE_AI=True)
-    @patch("planner.views.generate_date_plan", return_value="Fresh AI plan")
-    def test_results_post_generates_plan_when_both_participants_voted(
+    @patch("planner.views.generate_date_plan")
+    def test_results_post_does_not_generate_until_both_votes_exist(
         self,
         generate_date_plan,
     ):
-        plan = Plan.objects.create(
-            inviter_email="inviter@example.com",
-            invitee_email="invitee@example.com",
-        )
-        inviter = Participant.objects.create(
-            plan=plan,
-            email=plan.inviter_email,
-            role=Participant.INVITER,
-        )
-        invitee = Participant.objects.create(
-            plan=plan,
-            email=plan.invitee_email,
-            role=Participant.INVITEE,
-        )
+        plan, inviter, _invitee = self._create_plan_with_participants()
         Vote.objects.create(
             participant=inviter,
             dinner_choice="italian",
@@ -101,13 +215,22 @@ class PlannerViewTests(TestCase):
             sweet_choice="dessert",
             budget_choice="mid",
         )
-        Vote.objects.create(
-            participant=invitee,
-            dinner_choice="sushi",
-            activity_choice="music",
-            sweet_choice="coffee",
-            budget_choice="cozy",
-        )
+
+        response = self.client.post(reverse("planner:results", args=[inviter.token]))
+
+        self.assertEqual(response.status_code, 302)
+        plan.refresh_from_db()
+        self.assertEqual(plan.ai_summary, "")
+        generate_date_plan.assert_not_called()
+
+    @override_settings(ENABLE_AI=True)
+    @patch("planner.views.generate_date_plan", return_value="Fresh AI plan")
+    def test_results_post_generates_plan_when_both_participants_voted(
+        self,
+        generate_date_plan,
+    ):
+        plan, inviter, invitee = self._create_plan_with_participants()
+        self._create_votes_for_both(inviter, invitee)
 
         response = self.client.post(
             reverse("planner:results", args=[inviter.token]),
@@ -121,3 +244,48 @@ class PlannerViewTests(TestCase):
             plan,
             locale_hint="es-MX,es;q=0.9,en;q=0.8",
         )
+
+    @override_settings(ENABLE_AI=True)
+    @patch("planner.views.generate_date_plan", return_value="Refined plan")
+    def test_results_post_refine_uses_feedback_and_previous_summary(
+        self,
+        generate_date_plan,
+    ):
+        plan, inviter, invitee = self._create_plan_with_participants()
+        self._create_votes_for_both(inviter, invitee)
+        plan.ai_summary = "Initial plan"
+        plan.save(update_fields=["ai_summary"])
+
+        response = self.client.post(
+            reverse("planner:results", args=[inviter.token]),
+            data={"action": "refine", "feedback": "More relaxed pace"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        plan.refresh_from_db()
+        self.assertEqual(plan.ai_summary, "Refined plan")
+        generate_date_plan.assert_called_once_with(
+            plan,
+            locale_hint="en-US",
+            feedback="More relaxed pace",
+            previous_summary="Initial plan",
+        )
+
+    @override_settings(ENABLE_AI=True)
+    @patch("planner.views.generate_date_plan")
+    def test_results_post_refine_requires_existing_plan_before_refining(
+        self,
+        generate_date_plan,
+    ):
+        plan, inviter, invitee = self._create_plan_with_participants()
+        self._create_votes_for_both(inviter, invitee)
+
+        response = self.client.post(
+            reverse("planner:results", args=[inviter.token]),
+            data={"action": "refine", "feedback": "Use nearby places"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        plan.refresh_from_db()
+        self.assertEqual(plan.ai_summary, "")
+        generate_date_plan.assert_not_called()

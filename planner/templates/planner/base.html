@@ -13,6 +13,20 @@
 <body>
   <main class="page-wrap">
     <section class="card">
+      <nav class="top-nav" aria-label="Account navigation">
+        <a class="brand-link" href="{% url 'planner:home' %}">Date Nite</a>
+        <div class="nav-actions">
+          {% if request.user.is_authenticated %}
+            <span class="nav-chip">{{ request.user.email }}</span>
+            <a href="{% url 'planner:home' %}">My dates</a>
+            <a href="{% url 'planner:logout' %}">Log out</a>
+          {% else %}
+            <a href="{% url 'planner:login' %}">Log in</a>
+            <a href="{% url 'planner:signup' %}">Create account</a>
+          {% endif %}
+        </div>
+      </nav>
+
       <header class="hero">
         <p class="eyebrow">Date Nite Planner</p>
         <h1>Valentine voting for two</h1>

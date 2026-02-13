@@ -1,9 +1,26 @@
 {% extends 'planner/base.html' %}
 
 {% block content %}
-<p class="lead">Invite your partner, answer a deeper set of preferences, and generate a localized date-night story you can refine.</p>
+<section class="intro-grid">
+  <div class="intro-copy">
+    <p class="lead">Invite your partner, answer a deeper set of preferences, and generate a localized date-night story you can refine.</p>
+    <ul class="pill-list">
+      <li>Separate votes</li>
+      <li>Shared reveal</li>
+      <li>One-tap refine</li>
+    </ul>
+  </div>
+  <aside class="mini-panel" aria-label="How it works">
+    <h2>How it flows</h2>
+    <ol class="mini-steps">
+      <li>Create an invite in under a minute.</li>
+      <li>Each of you picks your favorites privately.</li>
+      <li>You get one romantic, practical plan.</li>
+    </ol>
+  </aside>
+</section>
 
-<form method="post" class="stacked-form">
+<form method="post" class="stacked-form panel-form">
   {% csrf_token %}
   {% for field in form %}
     <div class="form-row">
@@ -16,4 +33,40 @@
   {% endfor %}
   <button type="submit">Create invite</button>
 </form>
+
+<section class="dashboard-grid">
+  <article class="mini-panel">
+    <h2>Saved date plans</h2>
+    {% if plan_cards %}
+      <ul class="saved-list">
+        {% for item in plan_cards %}
+          <li>
+            <p><strong>{{ item.partner.email }}</strong></p>
+            <p>{{ item.plan.created_at|date:"M j, Y" }}{% if item.plan.city %} · {{ item.plan.city }}{% endif %}</p>
+            <p>{{ item.voted_count }}/2 voted {% if item.all_voted %}· ready to generate{% endif %}</p>
+            <a href="{% url 'planner:results' item.my_token %}">Open plan</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="lead">No saved plans yet. Your invites will appear here automatically.</p>
+    {% endif %}
+  </article>
+
+  <article class="mini-panel">
+    <h2>Connections</h2>
+    {% if connections %}
+      <ul class="connection-list">
+        {% for connection in connections %}
+          <li>
+            <strong>{{ connection.name }}</strong>
+            <span>{{ connection.count }} shared plan{{ connection.count|pluralize }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="lead">Connections appear after your first invite.</p>
+    {% endif %}
+  </article>
+</section>
 {% endblock %}

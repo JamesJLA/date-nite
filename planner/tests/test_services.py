@@ -80,3 +80,34 @@ class ServicesTests(TestCase):
         text = generate_date_plan(plan)
 
         self.assertIn("Gemini quota exceeded", text)
+
+    @patch.dict("os.environ", {"GOOGLE_API_KEY": "google-key"}, clear=True)
+    @patch("planner.services._gemini_generate", return_value="Plan from alias key")
+    def test_generate_date_plan_uses_google_api_key_alias(self, gemini_generate):
+        plan = self._create_plan_with_votes()
+
+        text = generate_date_plan(plan)
+
+        self.assertEqual(text, "Plan from alias key")
+        self.assertEqual(gemini_generate.call_args[0][1], "google-key")
+
+    @patch.dict("os.environ", {"GEMINI_API_KEY": "gemini-key"}, clear=True)
+    @patch("planner.services._gemini_generate", return_value="Refined plan")
+    def test_generate_date_plan_includes_refinement_context_in_prompt(
+        self,
+        gemini_generate,
+    ):
+        plan = self._create_plan_with_votes()
+
+        text = generate_date_plan(
+            plan,
+            feedback="Less travel and quieter places",
+            previous_summary="Original plan text",
+        )
+
+        self.assertEqual(text, "Refined plan")
+        prompt = gemini_generate.call_args[0][0]
+        self.assertIn("Previous plan", prompt)
+        self.assertIn("Original plan text", prompt)
+        self.assertIn("Refinement request from couple", prompt)
+        self.assertIn("Less travel and quieter places", prompt)

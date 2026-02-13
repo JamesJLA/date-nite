@@ -5,6 +5,7 @@ Simple Valentines-themed voting app for a couple to plan a night out.
 ### Features
 
 - Invite a partner by email and generate unique voting links for each person.
+- Create an account to keep your saved date plans and partner connections.
 - Collect each person's detailed choices (dinner, activity, sweets, budget, mood, duration, transport, notes) and store them in SQLite.
 - Show shared results when both votes are in.
 - Generate a cleaner date-night story using Gemini only when you click the button.

@@ -1,12 +1,14 @@
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import login
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
-from .forms import CreatePlanForm, RefinePlanForm, VoteForm
+from .forms import CreatePlanForm, RefinePlanForm, SignUpForm, VoteForm
 from .models import Participant, Plan, Vote
 from .services import generate_date_plan
 
@@ -49,25 +51,164 @@ def _format_story(summary: str):
     return intro, steps, closing
 
 
-class HomeView(View):
-    template_name = "planner/home.html"
+def _claim_participant_for_user(request, participant):
+    if not request.user.is_authenticated:
+        return participant
+    if not request.user.email:
+        return participant
+    if request.user.email.strip().lower() != participant.email.strip().lower():
+        return participant
+
+    updated = False
+    if participant.user_id is None:
+        participant.user = request.user
+        participant.save(update_fields=["user"])
+        updated = True
+    if (
+        participant.role == Participant.INVITER
+        and participant.plan.created_by_id is None
+    ):
+        participant.plan.created_by = request.user
+        participant.plan.save(update_fields=["created_by"])
+        updated = True
+
+    if updated:
+        messages.info(
+            request,
+            "This invite is now linked to your account so your plans stay saved.",
+        )
+    return participant
+
+
+def _enforce_participant_access(request, participant):
+    if participant.user_id is None:
+        return None
+    if not request.user.is_authenticated:
+        messages.info(request, "Sign in to access your saved date invite.")
+        return redirect(f"{reverse('planner:login')}?next={request.get_full_path()}")
+    if request.user.pk != participant.user_id:
+        messages.error(request, "That invite belongs to a different account.")
+        return redirect("planner:home")
+    return None
+
+
+def _build_user_dashboard(user):
+    plans = (
+        Plan.objects.filter(participants__user=user)
+        .distinct()
+        .prefetch_related("participants__vote", "participants__user")
+        .order_by("-created_at")
+    )
+
+    cards = []
+    connections = {}
+
+    for plan in plans:
+        participants = list(plan.participants.all())
+        my_participant = next(
+            (person for person in participants if person.user_id == user.id), None
+        )
+        partner = next(
+            (person for person in participants if person.user_id != user.id), None
+        )
+        if not my_participant or not partner:
+            continue
+
+        voted_count = sum(1 for person in participants if _get_vote(person))
+        cards.append(
+            {
+                "plan": plan,
+                "my_token": my_participant.token,
+                "partner": partner,
+                "voted_count": voted_count,
+                "all_voted": voted_count == len(participants),
+            }
+        )
+
+        partner_key = partner.email.strip().lower()
+        partner_name = partner.email
+        if partner.user_id:
+            partner_name = partner.user.email or partner.user.username
+        item = connections.get(partner_key)
+        if item is None:
+            connections[partner_key] = {
+                "name": partner_name,
+                "count": 1,
+                "last_plan": plan,
+            }
+        else:
+            item["count"] += 1
+            if plan.created_at > item["last_plan"].created_at:
+                item["last_plan"] = plan
+
+    sorted_connections = sorted(
+        connections.values(),
+        key=lambda entry: entry["last_plan"].created_at,
+        reverse=True,
+    )
+    return cards, sorted_connections
+
+
+class SignUpView(View):
+    template_name = "planner/signup.html"
 
     def get(self, request):
-        return render(request, self.template_name, {"form": CreatePlanForm()})
+        if request.user.is_authenticated:
+            return redirect("planner:home")
+        return render(request, self.template_name, {"form": SignUpForm()})
 
     def post(self, request):
-        form = CreatePlanForm(request.POST)
+        if request.user.is_authenticated:
+            return redirect("planner:home")
+
+        form = SignUpForm(request.POST)
         if not form.is_valid():
             return render(request, self.template_name, {"form": form})
 
+        user = form.save()
+        login(request, user)
+        messages.success(request, "Welcome! Your account is ready.")
+        return redirect("planner:home")
+
+
+class HomeView(LoginRequiredMixin, View):
+    template_name = "planner/home.html"
+    login_url = "planner:login"
+
+    def _build_context(self, request, form=None):
+        cards, connections = _build_user_dashboard(request.user)
+        return {
+            "form": form
+            or CreatePlanForm(initial={"inviter_email": request.user.email}),
+            "plan_cards": cards,
+            "connections": connections,
+        }
+
+    def get(self, request):
+        return render(request, self.template_name, self._build_context(request))
+
+    def post(self, request):
+        form = CreatePlanForm(request.POST)
+        inviter_email = form.data.get("inviter_email", "").strip().lower()
+        account_email = (request.user.email or "").strip().lower()
+        if account_email and inviter_email and inviter_email != account_email:
+            form.add_error("inviter_email", "Use the same email as your account.")
+
+        if not form.is_valid():
+            return render(
+                request, self.template_name, self._build_context(request, form=form)
+            )
+
         with transaction.atomic():
             plan = Plan.objects.create(
+                created_by=request.user,
                 inviter_email=form.cleaned_data["inviter_email"],
                 invitee_email=form.cleaned_data["invitee_email"],
                 city=form.cleaned_data["city"],
             )
             inviter = Participant.objects.create(
                 plan=plan,
+                user=request.user,
                 email=plan.inviter_email,
                 role=Participant.INVITER,
             )
@@ -102,8 +243,13 @@ class VoteView(View):
 
     def get(self, request, token):
         participant = get_object_or_404(
-            Participant.objects.select_related("plan"), token=token
+            Participant.objects.select_related("plan", "user"), token=token
         )
+        participant = _claim_participant_for_user(request, participant)
+        access_response = _enforce_participant_access(request, participant)
+        if access_response:
+            return access_response
+
         vote = _get_vote(participant)
         form = VoteForm(instance=vote)
         return render(
@@ -112,8 +258,13 @@ class VoteView(View):
 
     def post(self, request, token):
         participant = get_object_or_404(
-            Participant.objects.select_related("plan"), token=token
+            Participant.objects.select_related("plan", "user"), token=token
         )
+        participant = _claim_participant_for_user(request, participant)
+        access_response = _enforce_participant_access(request, participant)
+        if access_response:
+            return access_response
+
         vote = _get_vote(participant)
         form = VoteForm(request.POST, instance=vote)
         if not form.is_valid():
@@ -164,15 +315,25 @@ class ResultsView(View):
 
     def get(self, request, token):
         participant = get_object_or_404(
-            Participant.objects.select_related("plan"), token=token
+            Participant.objects.select_related("plan", "user"), token=token
         )
+        participant = _claim_participant_for_user(request, participant)
+        access_response = _enforce_participant_access(request, participant)
+        if access_response:
+            return access_response
+
         context = self._build_context(request, participant)
         return render(request, self.template_name, context)
 
     def post(self, request, token):
         participant = get_object_or_404(
-            Participant.objects.select_related("plan"), token=token
+            Participant.objects.select_related("plan", "user"), token=token
         )
+        participant = _claim_participant_for_user(request, participant)
+        access_response = _enforce_participant_access(request, participant)
+        if access_response:
+            return access_response
+
         context = self._build_context(request, participant)
 
         if not context["all_voted"]:

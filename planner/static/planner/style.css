@@ -27,6 +27,33 @@ body {
     linear-gradient(160deg, #f6a7bb 0%, #f8b8c8 30%, #fdd4de 70%, #ffe8ee 100%);
 }
 
+body::before,
+body::after {
+  position: fixed;
+  z-index: -2;
+  pointer-events: none;
+  color: rgba(143, 45, 69, 0.18);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(1.1rem, 2.2vw, 1.7rem);
+  letter-spacing: 0.5rem;
+  line-height: 1.8;
+  white-space: pre;
+}
+
+body::before {
+  content: '\2665\2665\2665\A\2665\2665\A\2665\2665\2665';
+  top: 6.4rem;
+  right: 1.2rem;
+  transform: rotate(-8deg);
+}
+
+body::after {
+  content: '\2665\2665\A\2665\2665\2665\A\2665\2665';
+  bottom: 2.6rem;
+  left: 1.2rem;
+  transform: rotate(10deg);
+}
+
 h1,
 h2,
 legend {
@@ -125,6 +152,30 @@ legend {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+.card::after {
+  content: '\2665';
+  position: absolute;
+  right: 1rem;
+  bottom: 0.8rem;
+  font-size: 1.05rem;
+  color: rgba(143, 45, 69, 0.24);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body::before {
+    animation: hearts-float-right 8.4s ease-in-out infinite;
+  }
+
+  body::after {
+    animation: hearts-float-left 9.6s ease-in-out infinite;
+  }
+
+  .card::after {
+    animation: heart-pulse 3.8s ease-in-out infinite;
+  }
 }
 
 .eyebrow {
@@ -491,6 +542,13 @@ a:hover {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  body::before,
+  body::after {
+    font-size: 1rem;
+    letter-spacing: 0.34rem;
+    opacity: 0.75;
+  }
 }
 
 @keyframes rise-in {
@@ -502,5 +560,44 @@ a:hover {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes hearts-float-right {
+  0%,
+  100% {
+    transform: rotate(-8deg) translateY(0);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: rotate(-8deg) translateY(-12px);
+    opacity: 1;
+  }
+}
+
+@keyframes hearts-float-left {
+  0%,
+  100% {
+    transform: rotate(10deg) translateY(0);
+    opacity: 0.68;
+  }
+
+  50% {
+    transform: rotate(10deg) translateY(10px);
+    opacity: 0.95;
+  }
+}
+
+@keyframes heart-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
   }
 }

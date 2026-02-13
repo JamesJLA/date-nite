@@ -5,17 +5,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Date Nite</title>
+  <script>
+    (() => {
+      const saved = localStorage.getItem("dn_theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      } else {
+        document.documentElement.removeAttribute("data-theme");
+      }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;700&family=Nunito:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'planner/style.css' %}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <main class="page-wrap">
     <section class="card">
       <nav class="top-nav" aria-label="Account navigation">
         <a class="brand-link" href="{% url 'planner:home' %}">Date Nite</a>
         <div class="nav-actions">
+          <div class="theme-switcher" role="group" aria-label="Theme preference">
+            <button type="button" class="theme-btn" data-theme-choice="auto">Auto</button>
+            <button type="button" class="theme-btn" data-theme-choice="light">Light</button>
+            <button type="button" class="theme-btn" data-theme-choice="dark">Dark</button>
+          </div>
           {% if request.user.is_authenticated %}
             <span class="nav-chip">{{ request.user.email }}</span>
             <a href="{% url 'planner:home' %}">My dates</a>
@@ -44,5 +59,38 @@
       {% block content %}{% endblock %}
     </section>
   </main>
+  <script>
+    (() => {
+      const buttons = Array.from(document.querySelectorAll(".theme-btn"));
+      if (!buttons.length) {
+        return;
+      }
+
+      const applyChoice = (choice) => {
+        if (choice === "light" || choice === "dark") {
+          document.documentElement.setAttribute("data-theme", choice);
+          localStorage.setItem("dn_theme", choice);
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+          localStorage.removeItem("dn_theme");
+        }
+
+        buttons.forEach((button) => {
+          const isActive = button.dataset.themeChoice === choice;
+          button.classList.toggle("is-active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+      };
+
+      const saved = localStorage.getItem("dn_theme");
+      applyChoice(saved === "light" || saved === "dark" ? saved : "auto");
+
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          applyChoice(button.dataset.themeChoice || "auto");
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

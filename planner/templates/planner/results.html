@@ -4,12 +4,18 @@
 <h2>Voting status</h2>
 
 <ul class="status-list">
-  {% for person, vote in participant_votes %}
+  {% for item in participant_votes %}
     <li>
-      <strong>{{ person.get_role_display }}</strong> ({{ person.email }})
-      {% if vote %}
+      <strong>{{ item.person.get_role_display }}</strong> ({{ item.person.email }})
+      {% if item.answers %}
         <span class="done">voted</span>
-        <p>{{ vote.get_dinner_choice_display }} · {{ vote.get_activity_choice_display }} · {{ vote.get_sweet_choice_display }} · {{ vote.get_budget_choice_display }}</p>
+        {% if item.rows %}
+          <p>
+            {% for row in item.rows %}
+              {{ row.question }}: {{ row.answer }}{% if not forloop.last %} · {% endif %}
+            {% endfor %}
+          </p>
+        {% endif %}
       {% else %}
         <span class="pending">waiting</span>
       {% endif %}

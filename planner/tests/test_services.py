@@ -2,12 +2,54 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from planner.models import Participant, Plan, Vote
+from planner.models import GeneratedVote, Participant, Plan, Vote
 from planner.services import _build_local_itinerary, generate_date_plan
 
 
 class ServicesTests(TestCase):
     def _create_plan_with_votes(self):
+        plan = Plan.objects.create(
+            inviter_email="inviter@example.com",
+            invitee_email="invitee@example.com",
+            city="Austin, TX",
+        )
+        inviter = Participant.objects.create(
+            plan=plan,
+            email=plan.inviter_email,
+            role=Participant.INVITER,
+        )
+        invitee = Participant.objects.create(
+            plan=plan,
+            email=plan.invitee_email,
+            role=Participant.INVITEE,
+        )
+        GeneratedVote.objects.create(
+            participant=inviter,
+            answers={
+                "dinner_choice": "italian",
+                "activity_choice": "movie",
+                "sweet_choice": "dessert",
+                "budget_choice": "mid",
+                "mood_choice": "classic",
+                "duration_choice": "half",
+                "transport_choice": "mixed",
+            },
+        )
+        GeneratedVote.objects.create(
+            participant=invitee,
+            answers={
+                "dinner_choice": "sushi",
+                "activity_choice": "music",
+                "sweet_choice": "coffee",
+                "budget_choice": "cozy",
+                "mood_choice": "playful",
+                "duration_choice": "short",
+                "transport_choice": "walk",
+            },
+        )
+        return plan
+
+    def _create_plan_with_legacy_votes(self):
         plan = Plan.objects.create(
             inviter_email="inviter@example.com",
             invitee_email="invitee@example.com",
@@ -29,6 +71,9 @@ class ServicesTests(TestCase):
             activity_choice="movie",
             sweet_choice="dessert",
             budget_choice="mid",
+            mood_choice="classic",
+            duration_choice="half",
+            transport_choice="mixed",
         )
         Vote.objects.create(
             participant=invitee,
@@ -36,6 +81,9 @@ class ServicesTests(TestCase):
             activity_choice="music",
             sweet_choice="coffee",
             budget_choice="cozy",
+            mood_choice="playful",
+            duration_choice="short",
+            transport_choice="walk",
         )
         return plan
 
@@ -57,6 +105,15 @@ class ServicesTests(TestCase):
 
         self.assertIn("Local fallback plan", text)
         self.assertIn("no AI key configured", text)
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_generate_date_plan_supports_legacy_vote_rows(self):
+        plan = self._create_plan_with_legacy_votes()
+
+        text = generate_date_plan(plan)
+
+        self.assertIn("Local fallback plan", text)
+        self.assertNotIn("Waiting for both votes", text)
 
     @patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True)
     @patch("planner.services._gemini_generate", return_value="A generated story")

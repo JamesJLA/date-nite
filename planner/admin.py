@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Participant, Plan, Vote
+from .models import GeneratedVote, Participant, Plan, Vote
 
 
 @admin.register(Plan)
@@ -27,3 +27,8 @@ class VoteAdmin(admin.ModelAdmin):
         "submitted_at",
     )
     list_filter = ("dinner_choice", "activity_choice", "budget_choice")
+
+
+@admin.register(GeneratedVote)
+class GeneratedVoteAdmin(admin.ModelAdmin):
+    list_display = ("id", "participant", "submitted_at")

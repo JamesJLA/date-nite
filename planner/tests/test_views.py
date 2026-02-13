@@ -5,7 +5,7 @@ from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from planner.models import Participant, Plan, Vote
+from planner.models import GeneratedVote, Participant, Plan
 from planner.views import _format_story
 
 User = get_user_model()
@@ -49,26 +49,39 @@ class PlannerViewTests(TestCase):
         return plan, inviter, invitee
 
     def _create_votes_for_both(self, inviter, invitee):
-        Vote.objects.create(
+        GeneratedVote.objects.create(
             participant=inviter,
-            dinner_choice="italian",
-            activity_choice="movie",
-            sweet_choice="dessert",
-            budget_choice="mid",
+            answers={
+                "dinner_choice": "italian",
+                "activity_choice": "movie",
+                "sweet_choice": "dessert",
+                "budget_choice": "mid",
+                "mood_choice": "classic",
+                "duration_choice": "half",
+                "transport_choice": "mixed",
+                "dietary_notes": "",
+                "accessibility_notes": "",
+            },
         )
-        Vote.objects.create(
+        GeneratedVote.objects.create(
             participant=invitee,
-            dinner_choice="sushi",
-            activity_choice="music",
-            sweet_choice="coffee",
-            budget_choice="cozy",
+            answers={
+                "dinner_choice": "sushi",
+                "activity_choice": "music",
+                "sweet_choice": "coffee",
+                "budget_choice": "cozy",
+                "mood_choice": "playful",
+                "duration_choice": "short",
+                "transport_choice": "walk",
+                "dietary_notes": "",
+                "accessibility_notes": "",
+            },
         )
 
-    def test_home_requires_login(self):
+    def test_home_allows_guest_session(self):
         response = self.client.get(reverse("planner:home"))
 
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse("planner:login"), response.url)
+        self.assertEqual(response.status_code, 200)
 
     def test_home_post_creates_plan_sends_email_and_redirects(self):
         user = User.objects.create_user(
@@ -129,6 +142,12 @@ class PlannerViewTests(TestCase):
             ideal_date="Dinner somewhere warm and cozy.",
             role=Participant.INVITER,
         )
+        Participant.objects.create(
+            plan=plan,
+            email=plan.invitee_email,
+            ideal_date="Chill evening with live music.",
+            role=Participant.INVITEE,
+        )
 
         response = self.client.post(
             reverse("planner:vote", args=[inviter.token]),
@@ -146,7 +165,7 @@ class PlannerViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(Vote.objects.filter(participant=inviter).exists())
+        self.assertTrue(GeneratedVote.objects.filter(participant=inviter).exists())
         plan.refresh_from_db()
         self.assertEqual(plan.ai_summary, "")
 
@@ -176,7 +195,7 @@ class PlannerViewTests(TestCase):
             inviter.ideal_date,
             "An intimate sushi dinner with a jazz bar after.",
         )
-        self.assertFalse(Vote.objects.filter(participant=inviter).exists())
+        self.assertFalse(GeneratedVote.objects.filter(participant=inviter).exists())
 
     def test_vote_post_requires_both_descriptions_before_vote_form_submits(self):
         _plan, inviter, invitee = self._create_plan_with_participants()
@@ -199,7 +218,7 @@ class PlannerViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertFalse(Vote.objects.filter(participant=inviter).exists())
+        self.assertFalse(GeneratedVote.objects.filter(participant=inviter).exists())
         self.assertFalse((invitee.ideal_date or "").strip())
 
     def test_vote_get_claims_participant_for_matching_user_email(self):
@@ -254,6 +273,25 @@ class PlannerViewTests(TestCase):
 
         self.assertRedirects(response, reverse("planner:home"))
 
+    def test_vote_post_describe_clears_all_existing_votes_for_plan(self):
+        _plan, inviter, invitee = self._create_plan_with_participants()
+        inviter.ideal_date = "Dinner and dancing"
+        inviter.save(update_fields=["ideal_date"])
+        invitee.ideal_date = "Low-key music night"
+        invitee.save(update_fields=["ideal_date"])
+        self._create_votes_for_both(inviter, invitee)
+
+        response = self.client.post(
+            reverse("planner:vote", args=[inviter.token]),
+            {
+                "action": "describe",
+                "ideal_date": "Updated ideal date with less travel.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(GeneratedVote.objects.count(), 0)
+
     @override_settings(ENABLE_AI=True)
     @patch("planner.views.generate_date_plan")
     def test_results_post_does_not_generate_until_both_votes_exist(
@@ -261,12 +299,19 @@ class PlannerViewTests(TestCase):
         generate_date_plan,
     ):
         plan, inviter, _invitee = self._create_plan_with_participants()
-        Vote.objects.create(
+        GeneratedVote.objects.create(
             participant=inviter,
-            dinner_choice="italian",
-            activity_choice="movie",
-            sweet_choice="dessert",
-            budget_choice="mid",
+            answers={
+                "dinner_choice": "italian",
+                "activity_choice": "movie",
+                "sweet_choice": "dessert",
+                "budget_choice": "mid",
+                "mood_choice": "classic",
+                "duration_choice": "half",
+                "transport_choice": "mixed",
+                "dietary_notes": "",
+                "accessibility_notes": "",
+            },
         )
 
         response = self.client.post(reverse("planner:results", args=[inviter.token]))

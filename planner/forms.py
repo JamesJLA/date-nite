@@ -2,21 +2,10 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
+from .constants import DEFAULT_GENERATED_QUESTIONS, DEFAULT_VOTE_QUESTION_LABELS
 from .models import Vote
 
 User = get_user_model()
-
-DEFAULT_VOTE_QUESTION_LABELS = {
-    "dinner_choice": "What dinner vibe sounds best?",
-    "activity_choice": "What should the main activity be?",
-    "sweet_choice": "How do you want to end the night?",
-    "budget_choice": "What budget level feels right?",
-    "mood_choice": "What mood are you going for?",
-    "duration_choice": "How long should the date be?",
-    "transport_choice": "How much travel are you open to?",
-    "dietary_notes": "Any dietary needs or foods to avoid?",
-    "accessibility_notes": "Any accessibility preferences to plan around?",
-}
 
 
 class CreatePlanForm(forms.Form):
@@ -68,12 +57,61 @@ class VoteForm(forms.ModelForm):
     def __init__(self, *args, question_labels=None, **kwargs):
         super().__init__(*args, **kwargs)
         labels = DEFAULT_VOTE_QUESTION_LABELS.copy()
-        if question_labels:
+        if isinstance(question_labels, dict):
             labels.update(question_labels)
-
         for name, label in labels.items():
-            if name in self.fields:
-                self.fields[name].label = label
+            if name in self.fields and isinstance(label, str) and label.strip():
+                self.fields[name].label = label.strip()
+
+
+class GeneratedVoteForm(forms.Form):
+    def __init__(self, *args, questions_schema=None, initial_answers=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        schema = questions_schema or DEFAULT_GENERATED_QUESTIONS
+
+        for question in schema.get("questions", []):
+            field_name = question.get("id")
+            if not field_name:
+                continue
+            label = question.get("text", field_name)
+            required = bool(question.get("required", False))
+            question_type = question.get("type", "single")
+
+            if question_type == "text":
+                self.fields[field_name] = forms.CharField(
+                    label=label,
+                    required=required,
+                    widget=forms.TextInput(
+                        attrs={"placeholder": question.get("placeholder", "")}
+                    ),
+                )
+            else:
+                choices = []
+                for option in question.get("options", []):
+                    value = option.get("value")
+                    option_label = option.get("label", value)
+                    if value:
+                        choices.append((value, option_label))
+                self.fields[field_name] = forms.ChoiceField(
+                    label=label,
+                    required=required,
+                    choices=choices,
+                    widget=forms.RadioSelect,
+                )
+
+        if initial_answers:
+            for key, value in initial_answers.items():
+                if key in self.fields:
+                    self.initial[key] = value
+
+    def cleaned_answers(self):
+        cleaned = {}
+        for name in self.fields:
+            value = self.cleaned_data.get(name)
+            if isinstance(value, str):
+                value = value.strip()
+            cleaned[name] = value
+        return cleaned
 
 
 class IdealDateForm(forms.Form):

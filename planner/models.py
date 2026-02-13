@@ -122,3 +122,16 @@ class Vote(models.Model):
 
     def __str__(self) -> str:
         return f"Vote from {self.participant.email}"
+
+
+class GeneratedVote(models.Model):
+    participant = models.OneToOneField(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="generated_vote",
+    )
+    answers = models.JSONField(default=dict, blank=True)
+    submitted_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"Generated vote from {self.participant.email}"

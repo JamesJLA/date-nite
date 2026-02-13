@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
-from .forms import CreatePlanForm, VoteForm
+from .forms import CreatePlanForm, RefinePlanForm, VoteForm
 from .models import Participant, Plan, Vote
 from .services import generate_date_plan
 
@@ -16,6 +16,37 @@ def _get_vote(participant):
         return participant.vote
     except Vote.DoesNotExist:
         return None
+
+
+def _format_story(summary: str):
+    if not summary:
+        return "", [], ""
+
+    lines = [line.strip() for line in summary.splitlines() if line.strip()]
+    if not lines:
+        return "", [], ""
+
+    intro_parts = []
+    steps = []
+    closing_parts = []
+    in_steps = False
+    for line in lines:
+        if line.startswith(("-", "*", "•")):
+            in_steps = True
+            steps.append(line.lstrip("-*• ").strip())
+            continue
+        if in_steps:
+            closing_parts.append(line)
+        else:
+            intro_parts.append(line)
+
+    if not steps and len(intro_parts) > 1:
+        steps = intro_parts[1:]
+        intro_parts = intro_parts[:1]
+
+    intro = " ".join(intro_parts)
+    closing = " ".join(closing_parts)
+    return intro, steps, closing
 
 
 class HomeView(View):
@@ -33,6 +64,7 @@ class HomeView(View):
             plan = Plan.objects.create(
                 inviter_email=form.cleaned_data["inviter_email"],
                 invitee_email=form.cleaned_data["invitee_email"],
+                city=form.cleaned_data["city"],
             )
             inviter = Participant.objects.create(
                 plan=plan,
@@ -102,10 +134,7 @@ class VoteView(View):
 class ResultsView(View):
     template_name = "planner/results.html"
 
-    def get(self, request, token):
-        participant = get_object_or_404(
-            Participant.objects.select_related("plan"), token=token
-        )
+    def _build_context(self, request, participant):
         plan = participant.plan
         participants = plan.participants.all()
 
@@ -114,13 +143,6 @@ class ResultsView(View):
             participant_votes.append((person, _get_vote(person)))
 
         all_voted = all(vote is not None for _, vote in participant_votes)
-        if all_voted and (
-            not plan.ai_summary
-            or plan.ai_summary.startswith("Gemini is not configured yet.")
-        ):
-            plan.ai_summary = generate_date_plan(plan)
-            plan.save(update_fields=["ai_summary"])
-
         invitee = plan.participants.filter(role=Participant.INVITEE).first()
         invitee_link = ""
         if invitee:
@@ -128,11 +150,63 @@ class ResultsView(View):
                 reverse("planner:vote", kwargs={"token": invitee.token})
             )
 
-        context = {
+        return {
             "participant": participant,
             "plan": plan,
             "participant_votes": participant_votes,
             "all_voted": all_voted,
             "invitee_link": invitee_link,
+            "can_generate": all_voted and settings.ENABLE_AI,
+            "ai_enabled": settings.ENABLE_AI,
+            "story": _format_story(plan.ai_summary),
+            "refine_form": RefinePlanForm(),
         }
+
+    def get(self, request, token):
+        participant = get_object_or_404(
+            Participant.objects.select_related("plan"), token=token
+        )
+        context = self._build_context(request, participant)
         return render(request, self.template_name, context)
+
+    def post(self, request, token):
+        participant = get_object_or_404(
+            Participant.objects.select_related("plan"), token=token
+        )
+        context = self._build_context(request, participant)
+
+        if not context["all_voted"]:
+            messages.warning(request, "Both of you must vote before generating a plan.")
+            return redirect("planner:results", token=participant.token)
+
+        if not settings.ENABLE_AI:
+            messages.warning(request, "AI generation is disabled for this environment.")
+            return redirect("planner:results", token=participant.token)
+
+        action = request.POST.get("action", "generate")
+        locale_hint = request.headers.get("Accept-Language", "en-US")
+        plan = participant.plan
+
+        if action == "refine":
+            refine_form = RefinePlanForm(request.POST)
+            if not refine_form.is_valid():
+                context["refine_form"] = refine_form
+                return render(request, self.template_name, context)
+            if not plan.ai_summary:
+                messages.warning(request, "Generate a first plan before refining it.")
+                return redirect("planner:results", token=participant.token)
+
+            plan.ai_summary = generate_date_plan(
+                plan,
+                locale_hint=locale_hint,
+                feedback=refine_form.cleaned_data["feedback"],
+                previous_summary=plan.ai_summary,
+            )
+            plan.save(update_fields=["ai_summary"])
+            messages.success(request, "Plan refined based on your feedback.")
+            return redirect("planner:results", token=participant.token)
+
+        plan.ai_summary = generate_date_plan(plan, locale_hint=locale_hint)
+        plan.save(update_fields=["ai_summary"])
+        messages.success(request, "AI plan generated.")
+        return redirect("planner:results", token=participant.token)

@@ -5,8 +5,8 @@ from .models import Participant, Plan, Vote
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ("id", "inviter_email", "invitee_email", "created_at")
-    search_fields = ("inviter_email", "invitee_email")
+    list_display = ("id", "inviter_email", "invitee_email", "city", "created_at")
+    search_fields = ("inviter_email", "invitee_email", "city")
 
 
 @admin.register(Participant)

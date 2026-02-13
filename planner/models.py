@@ -6,6 +6,7 @@ from django.db import models
 class Plan(models.Model):
     inviter_email = models.EmailField()
     invitee_email = models.EmailField()
+    city = models.CharField(max_length=120, blank=True)
     ai_summary = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -63,6 +64,22 @@ class Vote(models.Model):
         ("mid", "Moderate splurge"),
         ("fancy", "Full romance splurge"),
     ]
+    MOOD_CHOICES = [
+        ("playful", "Playful and light"),
+        ("classic", "Classic romantic"),
+        ("adventurous", "Adventurous"),
+        ("relaxed", "Relaxed and low-key"),
+    ]
+    DURATION_CHOICES = [
+        ("short", "2-3 hours"),
+        ("half", "Half evening"),
+        ("full", "Full evening"),
+    ]
+    TRANSPORT_CHOICES = [
+        ("walk", "Walking or short rides"),
+        ("drive", "Driving is fine"),
+        ("mixed", "Mix of both"),
+    ]
 
     participant = models.OneToOneField(
         Participant, on_delete=models.CASCADE, related_name="vote"
@@ -71,6 +88,17 @@ class Vote(models.Model):
     activity_choice = models.CharField(max_length=20, choices=ACTIVITY_CHOICES)
     sweet_choice = models.CharField(max_length=20, choices=SWEET_CHOICES)
     budget_choice = models.CharField(max_length=20, choices=BUDGET_CHOICES)
+    mood_choice = models.CharField(
+        max_length=20, choices=MOOD_CHOICES, default="classic"
+    )
+    duration_choice = models.CharField(
+        max_length=20, choices=DURATION_CHOICES, default="half"
+    )
+    transport_choice = models.CharField(
+        max_length=20, choices=TRANSPORT_CHOICES, default="mixed"
+    )
+    dietary_notes = models.CharField(max_length=200, blank=True)
+    accessibility_notes = models.CharField(max_length=200, blank=True)
     submitted_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:

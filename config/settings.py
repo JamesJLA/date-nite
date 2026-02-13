@@ -123,5 +123,6 @@ STATIC_URL = "static/"
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@datenite.local")
+ENABLE_AI = os.getenv("ENABLE_AI", "True") == "True"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

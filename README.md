@@ -5,9 +5,12 @@ Simple Valentines-themed voting app for a couple to plan a night out.
 ### Features
 
 - Invite a partner by email and generate unique voting links for each person.
-- Collect each person's choices (dinner, activity, sweets, budget) and store them in SQLite.
+- Collect each person's detailed choices (dinner, activity, sweets, budget, mood, duration, transport, notes) and store them in SQLite.
 - Show shared results when both votes are in.
-- Generate a date-night itinerary with Gemini when `GEMINI_API_KEY` is configured.
+- Generate a cleaner date-night story using Gemini only when you click the button.
+- Optionally add a city so the plan is localized.
+- Uses browser locale (`Accept-Language`) plus optional city to localize tone and suggestions.
+- Includes a second-round refinement form so couples can request changes to the first result.
 
 ### Local setup
 
@@ -27,12 +30,12 @@ Create a `.env` file in the project root:
 SECRET_KEY=replace-with-a-secret-value
 DEBUG=True
 GEMINI_API_KEY=your-key-here
-OPENAI_API_KEY=optional-openai-key
+ENABLE_AI=True
 DEFAULT_FROM_EMAIL=noreply@datenite.local
 ```
 
-AI provider priority is Gemini first, then OpenAI if Gemini is unavailable/quota-limited.
-If no AI key works, the app still generates a local fallback date plan.
+Provider is Gemini.
+If no Gemini key works, the app still generates a local fallback date plan.
 
 ### Notes
 

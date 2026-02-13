@@ -22,10 +22,59 @@
 {% endif %}
 
 {% if all_voted %}
-  <h2>Your Gemini date plan</h2>
-  <pre class="ai-output">{{ plan.ai_summary }}</pre>
+  <h2>Your AI date plan</h2>
+  {% if plan.city %}
+    <p class="lead">Localized for {{ plan.city }}.</p>
+  {% endif %}
+  {% if plan.ai_summary %}
+    <section class="ai-story">
+      {% if story.0 %}
+        <p class="story-intro">{{ story.0 }}</p>
+      {% endif %}
+      {% if story.1 %}
+        <ol class="story-steps">
+          {% for step in story.1 %}
+            <li>{{ step }}</li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+      {% if story.2 %}
+        <p class="story-close">{{ story.2 }}</p>
+      {% endif %}
+    </section>
+  {% else %}
+    {% if ai_enabled %}
+      <p class="lead">Generate your plan when you are ready. This makes one AI request.</p>
+      <form method="post" class="stacked-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="generate">
+        <button type="submit">Generate AI plan</button>
+      </form>
+    {% else %}
+      <p class="lead">AI generation is disabled for this environment.</p>
+    {% endif %}
+  {% endif %}
+  {% if plan.ai_summary and can_generate %}
+    <form method="post" class="stacked-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="generate">
+      <button type="submit">Regenerate AI plan</button>
+    </form>
+    <form method="post" class="stacked-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="refine">
+      <div class="form-row">
+        <label for="{{ refine_form.feedback.id_for_label }}">{{ refine_form.feedback.label }}</label>
+        {{ refine_form.feedback }}
+        {% if refine_form.feedback.errors %}
+          <small class="error">{{ refine_form.feedback.errors|striptags }}</small>
+        {% endif %}
+      </div>
+      <button type="submit">Refine this plan</button>
+    </form>
+  {% endif %}
 {% else %}
-  <p class="lead">Once both of you vote, this page will show your Gemini-generated plan.</p>
+  <p class="lead">Once both of you vote, this page will show your AI-generated plan.</p>
 {% endif %}
 
 <p class="alt-link"><a href="{% url 'planner:vote' participant.token %}">Update my choices</a></p>

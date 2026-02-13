@@ -1,0 +1,32 @@
+{% extends 'planner/base.html' %}
+
+{% block content %}
+<h2>Voting status</h2>
+
+<ul class="status-list">
+  {% for person, vote in participant_votes %}
+    <li>
+      <strong>{{ person.get_role_display }}</strong> ({{ person.email }})
+      {% if vote %}
+        <span class="done">voted</span>
+        <p>{{ vote.get_dinner_choice_display }} · {{ vote.get_activity_choice_display }} · {{ vote.get_sweet_choice_display }} · {{ vote.get_budget_choice_display }}</p>
+      {% else %}
+        <span class="pending">waiting</span>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>
+
+{% if invitee_link and participant.role == 'inviter' %}
+  <p class="share-link">Share this link with your partner if needed:<br><a href="{{ invitee_link }}">{{ invitee_link }}</a></p>
+{% endif %}
+
+{% if all_voted %}
+  <h2>Your Gemini date plan</h2>
+  <pre class="ai-output">{{ plan.ai_summary }}</pre>
+{% else %}
+  <p class="lead">Once both of you vote, this page will show your Gemini-generated plan.</p>
+{% endif %}
+
+<p class="alt-link"><a href="{% url 'planner:vote' participant.token %}">Update my choices</a></p>
+{% endblock %}

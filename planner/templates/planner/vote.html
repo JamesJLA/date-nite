@@ -1,0 +1,22 @@
+{% extends 'planner/base.html' %}
+
+{% block content %}
+<p class="lead">Voting as <strong>{{ participant.email }}</strong>.</p>
+
+<form method="post" class="stacked-form">
+  {% csrf_token %}
+  {% for field in form %}
+    <fieldset class="choice-block">
+      <legend>{{ field.label }}</legend>
+      {{ field }}
+      {% if field.errors %}
+        <small class="error">{{ field.errors|striptags }}</small>
+      {% endif %}
+    </fieldset>
+  {% endfor %}
+
+  <button type="submit">Save my choices</button>
+</form>
+
+<p class="alt-link"><a href="{% url 'planner:results' participant.token %}">See results status</a></p>
+{% endblock %}

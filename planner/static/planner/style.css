@@ -1,0 +1,147 @@
+:root {
+  --rose-900: #5f1d2a;
+  --rose-700: #8d2f45;
+  --rose-500: #c24b67;
+  --cream: #fff4ec;
+  --paper: #fffaf7;
+  --ink: #2c1a1f;
+  --soft: #f8d4da;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Nunito', sans-serif;
+  color: var(--ink);
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, #ffdce3 0%, #ffdce3 25%, #f9b8c4 45%, #f4a0b2 100%);
+}
+
+h1,
+h2,
+legend {
+  font-family: 'Cormorant Garamond', serif;
+}
+
+.page-wrap {
+  width: min(92%, 760px);
+  margin: 3rem auto;
+}
+
+.card {
+  background: var(--paper);
+  border: 1px solid #f4c4ce;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 18px 44px rgba(97, 33, 49, 0.2);
+}
+
+.eyebrow {
+  color: var(--rose-700);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  margin-bottom: 0.1rem;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: clamp(2rem, 6vw, 3rem);
+}
+
+.lead {
+  margin-top: 0;
+  line-height: 1.5;
+}
+
+.stacked-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-row label,
+fieldset legend {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 0.4rem;
+}
+
+input[type='email'] {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #e2a5b2;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: #fff;
+}
+
+.choice-block {
+  border: 1px solid #efbdc8;
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+  background: var(--cream);
+}
+
+ul {
+  padding-left: 1rem;
+}
+
+li {
+  margin-bottom: 0.8rem;
+}
+
+button {
+  width: fit-content;
+  background: linear-gradient(135deg, var(--rose-700), var(--rose-500));
+  color: white;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.72rem 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.message,
+.share-link {
+  background: var(--soft);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+}
+
+.done {
+  color: #23764d;
+  font-weight: 700;
+}
+
+.pending {
+  color: #8d2f45;
+  font-weight: 700;
+}
+
+.error {
+  color: #9f1d37;
+}
+
+.ai-output {
+  white-space: pre-wrap;
+  background: #fff;
+  border: 1px solid #efbdc8;
+  border-radius: 12px;
+  padding: 1rem;
+  font-family: 'Nunito', sans-serif;
+  line-height: 1.45;
+}
+
+.alt-link {
+  margin-top: 1rem;
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 1.2rem;
+    border-radius: 16px;
+  }
+}

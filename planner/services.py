@@ -1,5 +1,8 @@
 import importlib
+import json
 import os
+
+from .forms import DEFAULT_VOTE_QUESTION_LABELS
 
 
 def _collect_votes(plan):
@@ -77,6 +80,70 @@ def _gemini_generate(prompt: str, api_key: str):
         contents=prompt,
     )
     return (response.text or "").strip()
+
+
+def _extract_json_object(text: str):
+    if not text:
+        return {}
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`")
+        if stripped.startswith("json"):
+            stripped = stripped[4:].strip()
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return {}
+    try:
+        parsed = json.loads(stripped[start : end + 1])
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def generate_vote_questions(plan, locale_hint: str = "en-US"):
+    defaults = DEFAULT_VOTE_QUESTION_LABELS.copy()
+    people = []
+    for participant in plan.participants.all():
+        description = (participant.ideal_date or "").strip()
+        if description:
+            people.append(
+                f"- {participant.get_role_display()} ideal date: {description}"
+            )
+
+    if len(people) < 2:
+        return defaults
+
+    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not gemini_api_key:
+        return defaults
+
+    prompt = (
+        "You are helping a couple plan one date night. "
+        "Generate personalized question labels for a voting form. "
+        "Return JSON only, no markdown, no commentary.\n"
+        f"Locale preference: {locale_hint}\n"
+        "Use concise, warm language. Keep each value under 90 characters.\n"
+        "Required JSON keys exactly:\n"
+        "dinner_choice, activity_choice, sweet_choice, budget_choice, mood_choice, "
+        "duration_choice, transport_choice, dietary_notes, accessibility_notes\n\n"
+        f"Couple descriptions:\n{'\n'.join(people)}"
+    )
+
+    try:
+        text = _gemini_generate(prompt, gemini_api_key)
+        parsed = _extract_json_object(text)
+        if not parsed:
+            return defaults
+
+        normalized = defaults.copy()
+        for key in defaults:
+            value = parsed.get(key)
+            if isinstance(value, str) and value.strip():
+                normalized[key] = value.strip()
+        return normalized
+    except Exception:
+        return defaults
 
 
 def generate_date_plan(

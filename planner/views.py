@@ -8,9 +8,15 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
-from .forms import CreatePlanForm, RefinePlanForm, SignUpForm, VoteForm
+from .forms import (
+    CreatePlanForm,
+    IdealDateForm,
+    RefinePlanForm,
+    SignUpForm,
+    VoteForm,
+)
 from .models import Participant, Plan, Vote
-from .services import generate_date_plan
+from .services import generate_date_plan, generate_vote_questions
 
 
 def _get_vote(participant):
@@ -241,6 +247,49 @@ class HomeView(LoginRequiredMixin, View):
 class VoteView(View):
     template_name = "planner/vote.html"
 
+    @staticmethod
+    def _all_descriptions_submitted(plan):
+        participants = list(plan.participants.all())
+        return participants and all(
+            (person.ideal_date or "").strip() for person in participants
+        )
+
+    def _build_vote_context(
+        self, request, participant, vote_form=None, ideal_form=None
+    ):
+        plan = participant.plan
+        descriptions_ready = self._all_descriptions_submitted(plan)
+
+        if descriptions_ready and not plan.generated_questions:
+            locale_hint = request.headers.get("Accept-Language", "en-US")
+            plan.generated_questions = generate_vote_questions(
+                plan, locale_hint=locale_hint
+            )
+            plan.save(update_fields=["generated_questions"])
+
+        if not (participant.ideal_date or "").strip():
+            return {
+                "participant": participant,
+                "stage": "describe",
+                "ideal_form": ideal_form or IdealDateForm(),
+            }
+
+        if not descriptions_ready:
+            return {
+                "participant": participant,
+                "stage": "waiting",
+                "ideal_form": ideal_form
+                or IdealDateForm(initial={"ideal_date": participant.ideal_date}),
+            }
+
+        vote = _get_vote(participant)
+        return {
+            "participant": participant,
+            "stage": "vote",
+            "form": vote_form
+            or VoteForm(instance=vote, question_labels=plan.generated_questions),
+        }
+
     def get(self, request, token):
         participant = get_object_or_404(
             Participant.objects.select_related("plan", "user"), token=token
@@ -250,11 +299,8 @@ class VoteView(View):
         if access_response:
             return access_response
 
-        vote = _get_vote(participant)
-        form = VoteForm(instance=vote)
-        return render(
-            request, self.template_name, {"form": form, "participant": participant}
-        )
+        context = self._build_vote_context(request, participant)
+        return render(request, self.template_name, context)
 
     def post(self, request, token):
         participant = get_object_or_404(
@@ -265,12 +311,43 @@ class VoteView(View):
         if access_response:
             return access_response
 
-        vote = _get_vote(participant)
-        form = VoteForm(request.POST, instance=vote)
-        if not form.is_valid():
-            return render(
-                request, self.template_name, {"form": form, "participant": participant}
+        action = request.POST.get("action", "vote")
+        if action == "describe":
+            ideal_form = IdealDateForm(request.POST)
+            if not ideal_form.is_valid():
+                context = self._build_vote_context(
+                    request,
+                    participant,
+                    ideal_form=ideal_form,
+                )
+                return render(request, self.template_name, context)
+
+            participant.ideal_date = ideal_form.cleaned_data["ideal_date"].strip()
+            participant.save(update_fields=["ideal_date"])
+            participant.plan.generated_questions = {}
+            participant.plan.ai_summary = ""
+            participant.plan.save(update_fields=["generated_questions", "ai_summary"])
+            messages.success(
+                request, "Saved. Once both descriptions are in, your questions unlock."
             )
+            return redirect("planner:vote", token=participant.token)
+
+        if not self._all_descriptions_submitted(participant.plan):
+            messages.warning(
+                request,
+                "Both people need to describe their ideal date before voting starts.",
+            )
+            return redirect("planner:vote", token=participant.token)
+
+        vote = _get_vote(participant)
+        form = VoteForm(
+            request.POST,
+            instance=vote,
+            question_labels=participant.plan.generated_questions,
+        )
+        if not form.is_valid():
+            context = self._build_vote_context(request, participant, vote_form=form)
+            return render(request, self.template_name, context)
 
         saved_vote = form.save(commit=False)
         saved_vote.participant = participant

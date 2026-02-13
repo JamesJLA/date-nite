@@ -126,6 +126,7 @@ class PlannerViewTests(TestCase):
         inviter = Participant.objects.create(
             plan=plan,
             email=plan.inviter_email,
+            ideal_date="Dinner somewhere warm and cozy.",
             role=Participant.INVITER,
         )
 
@@ -148,6 +149,58 @@ class PlannerViewTests(TestCase):
         self.assertTrue(Vote.objects.filter(participant=inviter).exists())
         plan.refresh_from_db()
         self.assertEqual(plan.ai_summary, "")
+
+    def test_vote_get_first_visit_prompts_for_ideal_date(self):
+        plan, inviter, _invitee = self._create_plan_with_participants()
+
+        response = self.client.get(reverse("planner:vote", args=[inviter.token]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Describe your ideal date night")
+        self.assertContains(response, "Save my ideal date")
+
+    def test_vote_post_saves_ideal_date_before_voting(self):
+        _plan, inviter, _invitee = self._create_plan_with_participants()
+
+        response = self.client.post(
+            reverse("planner:vote", args=[inviter.token]),
+            {
+                "action": "describe",
+                "ideal_date": "An intimate sushi dinner with a jazz bar after.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        inviter.refresh_from_db()
+        self.assertEqual(
+            inviter.ideal_date,
+            "An intimate sushi dinner with a jazz bar after.",
+        )
+        self.assertFalse(Vote.objects.filter(participant=inviter).exists())
+
+    def test_vote_post_requires_both_descriptions_before_vote_form_submits(self):
+        _plan, inviter, invitee = self._create_plan_with_participants()
+        inviter.ideal_date = "Playful date with tapas and dancing."
+        inviter.save(update_fields=["ideal_date"])
+
+        response = self.client.post(
+            reverse("planner:vote", args=[inviter.token]),
+            {
+                "dinner_choice": "italian",
+                "activity_choice": "movie",
+                "sweet_choice": "dessert",
+                "budget_choice": "mid",
+                "mood_choice": "classic",
+                "duration_choice": "half",
+                "transport_choice": "mixed",
+                "dietary_notes": "",
+                "accessibility_notes": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Vote.objects.filter(participant=inviter).exists())
+        self.assertFalse((invitee.ideal_date or "").strip())
 
     def test_vote_get_claims_participant_for_matching_user_email(self):
         user = User.objects.create_user(

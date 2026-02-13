@@ -3,20 +3,50 @@
 {% block content %}
 <p class="lead">Voting as <strong>{{ participant.email }}</strong>.</p>
 
-<form method="post" class="stacked-form">
-  {% csrf_token %}
-  {% for field in form %}
-    <fieldset class="choice-block">
-      <legend>{{ field.label }}</legend>
-      {{ field }}
-      {% if field.errors %}
-        <small class="error">{{ field.errors|striptags }}</small>
+{% if stage == 'describe' %}
+  <p class="lead">Before voting starts, share what your ideal date looks like.</p>
+  <form method="post" class="stacked-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="describe">
+    <div class="form-row">
+      <label for="{{ ideal_form.ideal_date.id_for_label }}">{{ ideal_form.ideal_date.label }}</label>
+      {{ ideal_form.ideal_date }}
+      {% if ideal_form.ideal_date.errors %}
+        <small class="error">{{ ideal_form.ideal_date.errors|striptags }}</small>
       {% endif %}
-    </fieldset>
-  {% endfor %}
+    </div>
+    <button type="submit">Save my ideal date</button>
+  </form>
+{% elif stage == 'waiting' %}
+  <p class="lead">Your ideal date is saved. We will generate your custom questions as soon as your partner submits theirs.</p>
+  <form method="post" class="stacked-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="describe">
+    <div class="form-row">
+      <label for="{{ ideal_form.ideal_date.id_for_label }}">Update your ideal date</label>
+      {{ ideal_form.ideal_date }}
+      {% if ideal_form.ideal_date.errors %}
+        <small class="error">{{ ideal_form.ideal_date.errors|striptags }}</small>
+      {% endif %}
+    </div>
+    <button type="submit">Update my ideal date</button>
+  </form>
+{% else %}
+  <form method="post" class="stacked-form">
+    {% csrf_token %}
+    {% for field in form %}
+      <fieldset class="choice-block">
+        <legend>{{ field.label }}</legend>
+        {{ field }}
+        {% if field.errors %}
+          <small class="error">{{ field.errors|striptags }}</small>
+        {% endif %}
+      </fieldset>
+    {% endfor %}
 
-  <button type="submit">Save my choices</button>
-</form>
+    <button type="submit">Save my choices</button>
+  </form>
+{% endif %}
 
 <p class="alt-link"><a href="{% url 'planner:results' participant.token %}">See results status</a></p>
 {% endblock %}

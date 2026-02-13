@@ -6,6 +6,18 @@ from .models import Vote
 
 User = get_user_model()
 
+DEFAULT_VOTE_QUESTION_LABELS = {
+    "dinner_choice": "What dinner vibe sounds best?",
+    "activity_choice": "What should the main activity be?",
+    "sweet_choice": "How do you want to end the night?",
+    "budget_choice": "What budget level feels right?",
+    "mood_choice": "What mood are you going for?",
+    "duration_choice": "How long should the date be?",
+    "transport_choice": "How much travel are you open to?",
+    "dietary_notes": "Any dietary needs or foods to avoid?",
+    "accessibility_notes": "Any accessibility preferences to plan around?",
+}
+
 
 class CreatePlanForm(forms.Form):
     inviter_email = forms.EmailField(
@@ -52,6 +64,28 @@ class VoteForm(forms.ModelForm):
                 attrs={"placeholder": "Mobility, noise, or accessibility preferences"}
             ),
         }
+
+    def __init__(self, *args, question_labels=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = DEFAULT_VOTE_QUESTION_LABELS.copy()
+        if question_labels:
+            labels.update(question_labels)
+
+        for name, label in labels.items():
+            if name in self.fields:
+                self.fields[name].label = label
+
+
+class IdealDateForm(forms.Form):
+    ideal_date = forms.CharField(
+        label="Describe your ideal date night",
+        widget=forms.Textarea(
+            attrs={
+                "rows": 5,
+                "placeholder": "Describe your perfect night together: food, atmosphere, activities, pace, and anything to avoid.",
+            }
+        ),
+    )
 
 
 class RefinePlanForm(forms.Form):

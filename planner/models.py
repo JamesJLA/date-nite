@@ -17,6 +17,7 @@ class Plan(models.Model):
     inviter_email = models.EmailField()
     invitee_email = models.EmailField()
     city = models.CharField(max_length=120, blank=True)
+    generated_questions = models.JSONField(default=dict, blank=True)
     ai_summary = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -43,6 +44,7 @@ class Participant(models.Model):
         related_name="date_participations",
     )
     email = models.EmailField()
+    ideal_date = models.TextField(blank=True)
     role = models.CharField(max_length=16, choices=ROLE_CHOICES)
     token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 

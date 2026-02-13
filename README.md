@@ -27,10 +27,12 @@ Create a `.env` file in the project root:
 SECRET_KEY=replace-with-a-secret-value
 DEBUG=True
 GEMINI_API_KEY=your-key-here
+OPENAI_API_KEY=optional-openai-key
 DEFAULT_FROM_EMAIL=noreply@datenite.local
 ```
 
-If `GEMINI_API_KEY` is not set, the app still works and shows a fallback summary instead of AI output.
+AI provider priority is Gemini first, then OpenAI if Gemini is unavailable/quota-limited.
+If no AI key works, the app still generates a local fallback date plan.
 
 ### Notes
 

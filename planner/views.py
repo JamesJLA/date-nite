@@ -92,6 +92,9 @@ class VoteView(View):
         saved_vote = form.save(commit=False)
         saved_vote.participant = participant
         saved_vote.save()
+        if participant.plan.ai_summary:
+            participant.plan.ai_summary = ""
+            participant.plan.save(update_fields=["ai_summary"])
         messages.success(request, "Your choices are saved.")
         return redirect("planner:results", token=participant.token)
 
@@ -111,7 +114,10 @@ class ResultsView(View):
             participant_votes.append((person, _get_vote(person)))
 
         all_voted = all(vote is not None for _, vote in participant_votes)
-        if all_voted and not plan.ai_summary:
+        if all_voted and (
+            not plan.ai_summary
+            or plan.ai_summary.startswith("Gemini is not configured yet.")
+        ):
             plan.ai_summary = generate_date_plan(plan)
             plan.save(update_fields=["ai_summary"])
 

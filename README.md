@@ -1,6 +1,17 @@
 ## Date Nite (Django + Gemini)
 
-Simple Valentines-themed voting app for a couple to plan a night out.
+Date Nite is a couples planning app where two people submit preferences and get one shared date-night plan.
+
+### Live app
+
+Add your deployment URL here after launch: `<ADD_APP_URL_HERE>`
+
+### How it works
+
+1. One partner creates an invite and sends a private voting link.
+2. Each person submits their ideal date and personalized vote answers.
+3. The app combines both responses into shared results.
+4. Gemini can generate or refine a final date-night story (with a local fallback if AI is unavailable).
 
 ### Features
 

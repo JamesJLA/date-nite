@@ -95,15 +95,6 @@ def _invitee_vote_link(request, plan):
     )
 
 
-def _invite_email_link(invitee_email, invitee_link):
-    if not invitee_link or not invitee_email:
-        return ""
-    subject = quote(INVITE_EMAIL_SUBJECT)
-    body = quote(f"{INVITE_EMAIL_BODY_PREFIX}{invitee_link}")
-    recipient = quote(invitee_email.strip())
-    return f"mailto:{recipient}?subject={subject}&body={body}"
-
-
 def _invite_gmail_link(invitee_email, invitee_link):
     if not invitee_link or not invitee_email:
         return ""
@@ -404,11 +395,9 @@ class VoteView(View):
     ):
         plan = participant.plan
         invitee_link = ""
-        invite_email_link = ""
         invite_gmail_link = ""
         if participant.role == Participant.INVITER:
             invitee_link = _invitee_vote_link(request, plan)
-            invite_email_link = _invite_email_link(plan.invitee_email, invitee_link)
             invite_gmail_link = _invite_gmail_link(plan.invitee_email, invitee_link)
 
         descriptions_ready = self._all_descriptions_submitted(plan)
@@ -429,7 +418,6 @@ class VoteView(View):
                 "stage": "describe",
                 "ideal_form": ideal_form or IdealDateForm(),
                 "invitee_link": invitee_link,
-                "invite_email_link": invite_email_link,
                 "invite_gmail_link": invite_gmail_link,
             }
 
@@ -440,7 +428,6 @@ class VoteView(View):
                 "ideal_form": ideal_form
                 or IdealDateForm(initial={"ideal_date": participant.ideal_date}),
                 "invitee_link": invitee_link,
-                "invite_email_link": invite_email_link,
                 "invite_gmail_link": invite_gmail_link,
             }
 
@@ -454,7 +441,6 @@ class VoteView(View):
                 initial_answers=getattr(existing_vote, "answers", None),
             ),
             "invitee_link": invitee_link,
-            "invite_email_link": invite_email_link,
             "invite_gmail_link": invite_gmail_link,
         }
 

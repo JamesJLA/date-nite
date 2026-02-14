@@ -111,8 +111,6 @@ class PlannerViewTests(TestCase):
         self.assertContains(vote_response, share_link)
         self.assertContains(vote_response, "Open Gmail draft")
         self.assertContains(vote_response, "mail.google.com/mail/?view=cm")
-        self.assertContains(vote_response, "Send with email app")
-        self.assertContains(vote_response, "mailto:partner%40example.com")
 
     def test_home_post_rejects_mismatched_inviter_email(self):
         user = User.objects.create_user(

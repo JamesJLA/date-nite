@@ -4,7 +4,7 @@ Date Nite is a couples planning app where two people submit preferences and get 
 
 ### Live app
 
-Add your deployment URL here after launch: `<ADD_APP_URL_HERE>`
+https://date-nite-tuwrj.ondigitalocean.app/
 
 ### How it works
 

@@ -34,6 +34,7 @@
           {% if request.user.is_authenticated %}
             <span class="nav-chip">{{ request.user.email }}</span>
             <a href="{% url 'planner:home' %}">My dates</a>
+            <a href="{% url 'planner:password_change' %}">Settings</a>
             <a href="{% url 'planner:logout' %}">Log out</a>
           {% else %}
             <a href="{% url 'planner:login' %}">Log in</a>

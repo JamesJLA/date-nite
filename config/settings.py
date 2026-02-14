@@ -10,14 +10,30 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
+
+import dj_database_url
 
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name: str, default=None):
+    raw = os.getenv(name)
+    if raw is None:
+        return list(default or [])
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 # Quick-start development settings - unsuitable for production
@@ -27,9 +43,14 @@ load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-insecure-key-change-me")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", "True") == "True"
+DEBUG = _env_bool("DEBUG", True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = _env_list(
+    "ALLOWED_HOSTS",
+    ["127.0.0.1", "localhost"] if DEBUG else [],
+)
+
+CSRF_TRUSTED_ORIGINS = _env_list("CSRF_TRUSTED_ORIGINS")
 
 
 # Application definition
@@ -54,6 +75,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+if not DEBUG:
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
+
 ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
@@ -77,12 +101,22 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
@@ -120,12 +154,41 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+if not DEBUG:
+    STORAGES["staticfiles"] = {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    }
+
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend"
+    if DEBUG
+    else "django.core.mail.backends.smtp.EmailBackend",
+)
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@datenite.local")
 ENABLE_AI = os.getenv("ENABLE_AI", "True") == "True"
 LOGIN_URL = "planner:login"
 LOGIN_REDIRECT_URL = "planner:home"
 LOGOUT_REDIRECT_URL = "planner:login"
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", True)
+    SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
+    CSRF_COOKIE_SECURE = _env_bool("CSRF_COOKIE_SECURE", True)
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
+    SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", True)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

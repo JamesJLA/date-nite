@@ -42,4 +42,26 @@ If no Gemini key works, the app still generates a local fallback date plan.
 
 - Development email uses Django console backend (`EMAIL_BACKEND=console`), so invite emails print to terminal.
 - SQLite is the default database in development.
-- For production, switch `DATABASES` in `config/settings.py` to PostgreSQL.
+- Production uses `DATABASE_URL` (recommended: DigitalOcean Managed PostgreSQL).
+
+### Deploy to DigitalOcean App Platform
+
+First thing to do in DigitalOcean:
+
+1. Create a new **App** from this GitHub repository.
+2. Add a **Managed PostgreSQL** database component to the app.
+3. Add required app env vars:
+   - `DEBUG=False`
+   - `SECRET_KEY=<strong-random-value>`
+   - `ALLOWED_HOSTS=<your-app-domain>`
+   - `CSRF_TRUSTED_ORIGINS=https://<your-app-domain>`
+   - `DATABASE_URL` (from the managed database)
+   - `GEMINI_API_KEY=<optional but recommended>`
+
+Suggested service commands:
+
+- Build command: `uv sync --locked && uv run python manage.py collectstatic --noinput`
+- Run command: `uv run gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
+- Release command: `uv run python manage.py migrate`
+
+Health check path: `/healthz`

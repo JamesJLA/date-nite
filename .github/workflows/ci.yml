@@ -36,5 +36,16 @@ jobs:
       - name: Run Django system checks
         run: uv run python manage.py check
 
+      - name: Check for missing migrations
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: Run Django deploy checks
+        env:
+          DEBUG: "False"
+          SECRET_KEY: ci-deploy-check-secret-key-abcdefghijklmnopqrstuvwxyz-123456
+          ALLOWED_HOSTS: example.com
+          CSRF_TRUSTED_ORIGINS: https://example.com
+        run: uv run python manage.py check --deploy
+
       - name: Run test suite
         run: uv run python manage.py test

@@ -1,0 +1,41 @@
+name: date-nite
+services:
+  - name: web
+    environment_slug: python
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: REPLACE_WITH_YOUR_GITHUB_REPO
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    run_command: uv run gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    build_command: uv sync --locked && uv run python manage.py collectstatic --noinput
+    source_dir: .
+    health_check:
+      http_path: /healthz
+    envs:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: ALLOWED_HOSTS
+        value: REPLACE_WITH_APP_DOMAIN
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://REPLACE_WITH_APP_DOMAIN
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${db.DATABASE_URL}
+      - key: GEMINI_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: ENABLE_AI
+        value: "True"
+      - key: DEFAULT_FROM_EMAIL
+        value: noreply@datenite.app
+databases:
+  - name: db
+    engine: PG
+    production: true
+    version: "16"

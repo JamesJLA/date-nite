@@ -338,7 +338,7 @@ class HomeView(View):
         invite_link = request.build_absolute_uri(
             reverse("planner:vote", kwargs={"token": invitee.token})
         )
-        send_mail(
+        sent_count = send_mail(
             subject="You have a Date Nite invite",
             message=(
                 f"Your partner invited you to plan a Valentines date night.\n\n"
@@ -349,9 +349,18 @@ class HomeView(View):
             fail_silently=True,
         )
 
-        messages.success(
-            request, "Invite created. A voting link was sent to your partner email."
-        )
+        if sent_count:
+            messages.success(
+                request, "Invite created. A voting link was sent to your partner email."
+            )
+        else:
+            messages.warning(
+                request,
+                (
+                    "Invite created, but email delivery is not configured yet. "
+                    f"Share this link directly: {invite_link}"
+                ),
+            )
         _remember_session_token(request, inviter.token)
         return redirect("planner:vote", token=inviter.token)
 

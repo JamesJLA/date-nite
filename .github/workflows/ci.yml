@@ -30,6 +30,9 @@ jobs:
       - name: Run Ruff
         run: uvx ruff check .
 
+      - name: Check formatting with Ruff
+        run: uvx ruff format --check .
+
       - name: Run Django system checks
         run: uv run python manage.py check
 

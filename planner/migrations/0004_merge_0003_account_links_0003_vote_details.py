@@ -4,11 +4,9 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('planner', '0003_account_links'),
-        ('planner', '0003_vote_details'),
+        ("planner", "0003_account_links"),
+        ("planner", "0003_vote_details"),
     ]
 
-    operations = [
-    ]
+    operations = []

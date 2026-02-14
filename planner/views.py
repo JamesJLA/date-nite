@@ -1,7 +1,6 @@
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
-from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -329,38 +328,16 @@ class HomeView(View):
                 email=plan.inviter_email,
                 role=Participant.INVITER,
             )
-            invitee = Participant.objects.create(
+            Participant.objects.create(
                 plan=plan,
                 email=plan.invitee_email,
                 role=Participant.INVITEE,
             )
 
-        invite_link = request.build_absolute_uri(
-            reverse("planner:vote", kwargs={"token": invitee.token})
+        messages.success(
+            request,
+            "Invite created. Share the partner link below by email, message, or copy/paste.",
         )
-        sent_count = send_mail(
-            subject="You have a Date Nite invite",
-            message=(
-                f"Your partner invited you to plan a Valentines date night.\n\n"
-                f"Open this link to vote: {invite_link}"
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[invitee.email],
-            fail_silently=True,
-        )
-
-        if sent_count:
-            messages.success(
-                request, "Invite created. A voting link was sent to your partner email."
-            )
-        else:
-            messages.warning(
-                request,
-                (
-                    "Invite created, but email delivery is not configured yet. "
-                    f"Share this link directly: {invite_link}"
-                ),
-            )
         _remember_session_token(request, inviter.token)
         return redirect("planner:vote", token=inviter.token)
 
@@ -379,6 +356,14 @@ class VoteView(View):
         self, request, participant, vote_form=None, ideal_form=None
     ):
         plan = participant.plan
+        invitee_link = ""
+        if participant.role == Participant.INVITER:
+            invitee = plan.participants.filter(role=Participant.INVITEE).first()
+            if invitee:
+                invitee_link = request.build_absolute_uri(
+                    reverse("planner:vote", kwargs={"token": invitee.token})
+                )
+
         descriptions_ready = self._all_descriptions_submitted(plan)
 
         has_schema = isinstance(plan.generated_questions, dict) and bool(
@@ -396,6 +381,7 @@ class VoteView(View):
                 "participant": participant,
                 "stage": "describe",
                 "ideal_form": ideal_form or IdealDateForm(),
+                "invitee_link": invitee_link,
             }
 
         if not descriptions_ready:
@@ -404,6 +390,7 @@ class VoteView(View):
                 "stage": "waiting",
                 "ideal_form": ideal_form
                 or IdealDateForm(initial={"ideal_date": participant.ideal_date}),
+                "invitee_link": invitee_link,
             }
 
         existing_vote = getattr(participant, "generated_vote", None)
@@ -415,6 +402,7 @@ class VoteView(View):
                 questions_schema=plan.generated_questions,
                 initial_answers=getattr(existing_vote, "answers", None),
             ),
+            "invitee_link": invitee_link,
         }
 
     def get(self, request, token):

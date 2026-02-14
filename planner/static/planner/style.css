@@ -515,6 +515,30 @@ button:focus-visible {
   padding: 0.7rem 0.85rem;
 }
 
+.share-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.share-email-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 204, 222, 0.52);
+  border-radius: 999px;
+  padding: 0.72rem 1.3rem;
+  background: linear-gradient(125deg, #ffe9f1, #ffd2e4);
+  color: #7d2238;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.copy-status {
+  display: block;
+  margin-top: 0.45rem;
+}
+
 .done {
   color: #23764d;
   font-weight: 700;

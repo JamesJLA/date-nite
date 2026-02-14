@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -29,7 +28,6 @@ class FormatStoryTests(TestCase):
         self.assertEqual(closing, "")
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class PlannerViewTests(TestCase):
     def _create_plan_with_participants(self):
         plan = Plan.objects.create(
@@ -83,7 +81,7 @@ class PlannerViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_home_post_creates_plan_sends_email_and_redirects(self):
+    def test_home_post_creates_plan_and_shows_share_actions(self):
         user = User.objects.create_user(
             username="me@example.com",
             email="me@example.com",
@@ -106,8 +104,12 @@ class PlannerViewTests(TestCase):
         invitee = Participant.objects.get(plan=plan, role=Participant.INVITEE)
 
         self.assertRedirects(response, reverse("planner:vote", args=[inviter.token]))
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to, [invitee.email])
+
+        vote_response = self.client.get(reverse("planner:vote", args=[inviter.token]))
+        share_link = reverse("planner:vote", args=[invitee.token])
+        self.assertContains(vote_response, "Share invite link with your partner")
+        self.assertContains(vote_response, share_link)
+        self.assertContains(vote_response, "Send with email app")
 
     def test_home_post_rejects_mismatched_inviter_email(self):
         user = User.objects.create_user(

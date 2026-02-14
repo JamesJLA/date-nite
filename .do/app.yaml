@@ -9,8 +9,8 @@ services:
     http_port: 8080
     instance_count: 1
     instance_size_slug: basic-xxs
-    run_command: uv run gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-    build_command: uv sync --locked && uv run python manage.py collectstatic --noinput
+    run_command: python -m gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    build_command: python manage.py collectstatic --noinput
     source_dir: .
     health_check:
       http_path: /healthz

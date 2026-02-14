@@ -60,8 +60,8 @@ First thing to do in DigitalOcean:
 
 Suggested service commands:
 
-- Build command: `uv sync --locked && uv run python manage.py collectstatic --noinput`
-- Run command: `uv run gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
-- Release command: `uv run python manage.py migrate`
+- Build command: `python manage.py collectstatic --noinput`
+- Run command: `python -m gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
+- Release command: `python manage.py migrate`
 
 Health check path: `/healthz`

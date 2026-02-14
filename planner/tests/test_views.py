@@ -109,6 +109,8 @@ class PlannerViewTests(TestCase):
         share_link = reverse("planner:vote", args=[invitee.token])
         self.assertContains(vote_response, "Share invite link with your partner")
         self.assertContains(vote_response, share_link)
+        self.assertContains(vote_response, "Open Gmail draft")
+        self.assertContains(vote_response, "mail.google.com/mail/?view=cm")
         self.assertContains(vote_response, "Send with email app")
         self.assertContains(vote_response, "mailto:partner%40example.com")
 

@@ -104,6 +104,18 @@ def _invite_email_link(invitee_email, invitee_link):
     return f"mailto:{recipient}?subject={subject}&body={body}"
 
 
+def _invite_gmail_link(invitee_email, invitee_link):
+    if not invitee_link or not invitee_email:
+        return ""
+    recipient = quote(invitee_email.strip())
+    subject = quote(INVITE_EMAIL_SUBJECT)
+    body = quote(f"{INVITE_EMAIL_BODY_PREFIX}{invitee_link}")
+    return (
+        "https://mail.google.com/mail/?view=cm&fs=1"
+        f"&to={recipient}&su={subject}&body={body}"
+    )
+
+
 def _legacy_vote_answers(vote):
     return {
         "dinner_choice": vote.dinner_choice,
@@ -393,9 +405,11 @@ class VoteView(View):
         plan = participant.plan
         invitee_link = ""
         invite_email_link = ""
+        invite_gmail_link = ""
         if participant.role == Participant.INVITER:
             invitee_link = _invitee_vote_link(request, plan)
             invite_email_link = _invite_email_link(plan.invitee_email, invitee_link)
+            invite_gmail_link = _invite_gmail_link(plan.invitee_email, invitee_link)
 
         descriptions_ready = self._all_descriptions_submitted(plan)
 
@@ -416,6 +430,7 @@ class VoteView(View):
                 "ideal_form": ideal_form or IdealDateForm(),
                 "invitee_link": invitee_link,
                 "invite_email_link": invite_email_link,
+                "invite_gmail_link": invite_gmail_link,
             }
 
         if not descriptions_ready:
@@ -426,6 +441,7 @@ class VoteView(View):
                 or IdealDateForm(initial={"ideal_date": participant.ideal_date}),
                 "invitee_link": invitee_link,
                 "invite_email_link": invite_email_link,
+                "invite_gmail_link": invite_gmail_link,
             }
 
         existing_vote = getattr(participant, "generated_vote", None)
@@ -439,6 +455,7 @@ class VoteView(View):
             ),
             "invitee_link": invitee_link,
             "invite_email_link": invite_email_link,
+            "invite_gmail_link": invite_gmail_link,
         }
 
     def get(self, request, token):

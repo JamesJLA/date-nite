@@ -1,3 +1,8 @@
+"""View layer for invite, voting, and results flows."""
+
+from collections.abc import Iterable
+from urllib.parse import quote
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
@@ -18,6 +23,84 @@ from .services import generate_date_plan, generate_vote_questions
 
 
 SESSION_TOKEN_KEY = "planner_tokens"
+INVITE_EMAIL_SUBJECT = "You have a Date Nite invite"
+INVITE_EMAIL_BODY_PREFIX = (
+    "Your partner invited you to plan a date night. Open this link to vote: "
+)
+INVITE_CREATED_MESSAGE = (
+    "Invite created. Share the partner link below by email, message, or copy/paste."
+)
+
+
+def _normalize_email(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def _count_voted(participants: Iterable[Participant]) -> int:
+    return sum(1 for person in participants if _get_answers(person))
+
+
+def _plan_card(plan, my_token, partner, participants):
+    voted_count = _count_voted(participants)
+    return {
+        "plan": plan,
+        "my_token": my_token,
+        "partner": partner,
+        "voted_count": voted_count,
+        "all_voted": voted_count == len(participants),
+    }
+
+
+def _add_connection(connections, partner_key, partner_name, plan):
+    item = connections.get(partner_key)
+    if item is None:
+        connections[partner_key] = {
+            "name": partner_name,
+            "count": 1,
+            "last_plan": plan,
+        }
+        return
+
+    item["count"] += 1
+    if plan.created_at > item["last_plan"].created_at:
+        item["last_plan"] = plan
+
+
+def _sorted_connections(connections):
+    return sorted(
+        connections.values(),
+        key=lambda entry: entry["last_plan"].created_at,
+        reverse=True,
+    )
+
+
+def _load_accessible_participant(request, token):
+    participant = get_object_or_404(
+        Participant.objects.select_related("plan", "user"), token=token
+    )
+    _remember_session_token(request, participant.token)
+    participant = _claim_participant_for_user(request, participant)
+    access_response = _enforce_participant_access(request, participant)
+    if access_response:
+        return None, access_response
+    return participant, None
+
+
+def _invitee_vote_link(request, plan):
+    invitee = plan.participants.filter(role=Participant.INVITEE).first()
+    if not invitee:
+        return ""
+    return request.build_absolute_uri(
+        reverse("planner:vote", kwargs={"token": invitee.token})
+    )
+
+
+def _invite_email_link(invitee_link):
+    if not invitee_link:
+        return ""
+    subject = quote(INVITE_EMAIL_SUBJECT)
+    body = quote(f"{INVITE_EMAIL_BODY_PREFIX}{invitee_link}")
+    return f"mailto:?subject={subject}&body={body}"
 
 
 def _legacy_vote_answers(vote):
@@ -82,7 +165,7 @@ def _claim_participant_for_user(request, participant):
         return participant
     if not request.user.email:
         return participant
-    if request.user.email.strip().lower() != participant.email.strip().lower():
+    if _normalize_email(request.user.email) != _normalize_email(participant.email):
         return participant
 
     updated = False
@@ -162,35 +245,12 @@ def _build_session_dashboard(request):
         if not partner:
             continue
 
-        voted_count = sum(1 for person in all_people if _get_answers(person))
-        cards.append(
-            {
-                "plan": plan,
-                "my_token": my_participant.token,
-                "partner": partner,
-                "voted_count": voted_count,
-                "all_voted": voted_count == len(all_people),
-            }
-        )
+        cards.append(_plan_card(plan, my_participant.token, partner, all_people))
 
-        partner_key = partner.email.strip().lower()
-        item = connections.get(partner_key)
-        if item is None:
-            connections[partner_key] = {
-                "name": partner.email,
-                "count": 1,
-                "last_plan": plan,
-            }
-        else:
-            item["count"] += 1
-            if plan.created_at > item["last_plan"].created_at:
-                item["last_plan"] = plan
+        partner_key = _normalize_email(partner.email)
+        _add_connection(connections, partner_key, partner.email, plan)
 
-    sorted_connections = sorted(
-        connections.values(),
-        key=lambda entry: entry["last_plan"].created_at,
-        reverse=True,
-    )
+    sorted_connections = _sorted_connections(connections)
     cards.sort(key=lambda item: item["plan"].created_at, reverse=True)
     return cards, sorted_connections
 
@@ -221,38 +281,15 @@ def _build_user_dashboard(user):
         if not my_participant or not partner:
             continue
 
-        voted_count = sum(1 for person in participants if _get_answers(person))
-        cards.append(
-            {
-                "plan": plan,
-                "my_token": my_participant.token,
-                "partner": partner,
-                "voted_count": voted_count,
-                "all_voted": voted_count == len(participants),
-            }
-        )
+        cards.append(_plan_card(plan, my_participant.token, partner, participants))
 
-        partner_key = partner.email.strip().lower()
+        partner_key = _normalize_email(partner.email)
         partner_name = partner.email
         if partner.user_id:
             partner_name = partner.user.email or partner.user.username
-        item = connections.get(partner_key)
-        if item is None:
-            connections[partner_key] = {
-                "name": partner_name,
-                "count": 1,
-                "last_plan": plan,
-            }
-        else:
-            item["count"] += 1
-            if plan.created_at > item["last_plan"].created_at:
-                item["last_plan"] = plan
+        _add_connection(connections, partner_key, partner_name, plan)
 
-    sorted_connections = sorted(
-        connections.values(),
-        key=lambda entry: entry["last_plan"].created_at,
-        reverse=True,
-    )
+    sorted_connections = _sorted_connections(connections)
     return cards, sorted_connections
 
 
@@ -301,9 +338,9 @@ class HomeView(View):
 
     def post(self, request):
         form = CreatePlanForm(request.POST)
-        inviter_email = form.data.get("inviter_email", "").strip().lower()
+        inviter_email = _normalize_email(form.data.get("inviter_email"))
         account_email = (
-            (request.user.email or "").strip().lower()
+            _normalize_email(request.user.email)
             if request.user.is_authenticated
             else ""
         )
@@ -334,10 +371,7 @@ class HomeView(View):
                 role=Participant.INVITEE,
             )
 
-        messages.success(
-            request,
-            "Invite created. Share the partner link below by email, message, or copy/paste.",
-        )
+        messages.success(request, INVITE_CREATED_MESSAGE)
         _remember_session_token(request, inviter.token)
         return redirect("planner:vote", token=inviter.token)
 
@@ -357,12 +391,10 @@ class VoteView(View):
     ):
         plan = participant.plan
         invitee_link = ""
+        invite_email_link = ""
         if participant.role == Participant.INVITER:
-            invitee = plan.participants.filter(role=Participant.INVITEE).first()
-            if invitee:
-                invitee_link = request.build_absolute_uri(
-                    reverse("planner:vote", kwargs={"token": invitee.token})
-                )
+            invitee_link = _invitee_vote_link(request, plan)
+            invite_email_link = _invite_email_link(invitee_link)
 
         descriptions_ready = self._all_descriptions_submitted(plan)
 
@@ -382,6 +414,7 @@ class VoteView(View):
                 "stage": "describe",
                 "ideal_form": ideal_form or IdealDateForm(),
                 "invitee_link": invitee_link,
+                "invite_email_link": invite_email_link,
             }
 
         if not descriptions_ready:
@@ -391,6 +424,7 @@ class VoteView(View):
                 "ideal_form": ideal_form
                 or IdealDateForm(initial={"ideal_date": participant.ideal_date}),
                 "invitee_link": invitee_link,
+                "invite_email_link": invite_email_link,
             }
 
         existing_vote = getattr(participant, "generated_vote", None)
@@ -403,15 +437,11 @@ class VoteView(View):
                 initial_answers=getattr(existing_vote, "answers", None),
             ),
             "invitee_link": invitee_link,
+            "invite_email_link": invite_email_link,
         }
 
     def get(self, request, token):
-        participant = get_object_or_404(
-            Participant.objects.select_related("plan", "user"), token=token
-        )
-        _remember_session_token(request, participant.token)
-        participant = _claim_participant_for_user(request, participant)
-        access_response = _enforce_participant_access(request, participant)
+        participant, access_response = _load_accessible_participant(request, token)
         if access_response:
             return access_response
 
@@ -419,12 +449,7 @@ class VoteView(View):
         return render(request, self.template_name, context)
 
     def post(self, request, token):
-        participant = get_object_or_404(
-            Participant.objects.select_related("plan", "user"), token=token
-        )
-        _remember_session_token(request, participant.token)
-        participant = _claim_participant_for_user(request, participant)
-        access_response = _enforce_participant_access(request, participant)
+        participant, access_response = _load_accessible_participant(request, token)
         if access_response:
             return access_response
 
@@ -524,12 +549,7 @@ class ResultsView(View):
             )
 
         all_voted = all(item["answers"] is not None for item in participant_votes)
-        invitee = plan.participants.filter(role=Participant.INVITEE).first()
-        invitee_link = ""
-        if invitee:
-            invitee_link = request.build_absolute_uri(
-                reverse("planner:vote", kwargs={"token": invitee.token})
-            )
+        invitee_link = _invitee_vote_link(request, plan)
 
         return {
             "participant": participant,
@@ -544,12 +564,7 @@ class ResultsView(View):
         }
 
     def get(self, request, token):
-        participant = get_object_or_404(
-            Participant.objects.select_related("plan", "user"), token=token
-        )
-        _remember_session_token(request, participant.token)
-        participant = _claim_participant_for_user(request, participant)
-        access_response = _enforce_participant_access(request, participant)
+        participant, access_response = _load_accessible_participant(request, token)
         if access_response:
             return access_response
 
@@ -557,12 +572,7 @@ class ResultsView(View):
         return render(request, self.template_name, context)
 
     def post(self, request, token):
-        participant = get_object_or_404(
-            Participant.objects.select_related("plan", "user"), token=token
-        )
-        _remember_session_token(request, participant.token)
-        participant = _claim_participant_for_user(request, participant)
-        access_response = _enforce_participant_access(request, participant)
+        participant, access_response = _load_accessible_participant(request, token)
         if access_response:
             return access_response
 

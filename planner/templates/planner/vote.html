@@ -9,7 +9,7 @@
     <p><a href="{{ invitee_link }}">{{ invitee_link }}</a></p>
     <div class="share-actions">
       <button type="button" class="share-copy-btn" data-copy-target="{{ invitee_link }}">Copy link</button>
-      <a class="share-email-btn" href="mailto:?subject={{ 'You have a Date Nite invite'|urlencode }}&body={{ 'Your partner invited you to plan a date night. Open this link to vote: '|add:invitee_link|urlencode }}">Send with email app</a>
+      <a class="share-email-btn" href="{{ invite_email_link }}">Send with email app</a>
     </div>
     <small class="copy-status" aria-live="polite"></small>
   </section>

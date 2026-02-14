@@ -110,6 +110,7 @@ class PlannerViewTests(TestCase):
         self.assertContains(vote_response, "Share invite link with your partner")
         self.assertContains(vote_response, share_link)
         self.assertContains(vote_response, "Send with email app")
+        self.assertContains(vote_response, "mailto:partner%40example.com")
 
     def test_home_post_rejects_mismatched_inviter_email(self):
         user = User.objects.create_user(

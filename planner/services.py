@@ -2,9 +2,85 @@ import copy
 import importlib
 import json
 import os
+import re
 
 from .constants import DEFAULT_GENERATED_QUESTIONS
 from .models import Vote
+
+
+_NUMBERED_STEP_RE = re.compile(
+    r"^\s*(?:\d+[\.)]|[ivxlcdm]+[\.)])\s+(.*)$", re.IGNORECASE
+)
+
+
+def _clean_line(line: str) -> str:
+    cleaned = line.strip()
+    if not cleaned:
+        return ""
+    cleaned = cleaned.lstrip("#").strip()
+    if cleaned.startswith("**") and cleaned.endswith("**") and len(cleaned) > 4:
+        cleaned = cleaned[2:-2].strip()
+    return cleaned
+
+
+def _strip_step_prefix(line: str) -> str:
+    stripped = line.strip()
+    for prefix in ("-", "*", "•"):
+        if stripped.startswith(prefix):
+            return stripped[len(prefix) :].strip()
+    numbered_match = _NUMBERED_STEP_RE.match(stripped)
+    if numbered_match:
+        return numbered_match.group(1).strip()
+    return ""
+
+
+def _clean_generated_plan(text: str) -> str:
+    if not text:
+        return ""
+
+    raw_lines = [line for line in text.splitlines() if line.strip()]
+    if not raw_lines:
+        return ""
+    if len(raw_lines) == 1:
+        return _clean_line(raw_lines[0])
+
+    lines = [_clean_line(line) for line in raw_lines]
+    lines = [line for line in lines if line and line != "```"]
+    if not lines:
+        return ""
+
+    intro = ""
+    steps = []
+    trailing = []
+    reached_steps = False
+
+    for line in lines:
+        step = _strip_step_prefix(line)
+        if step:
+            reached_steps = True
+            steps.append(step)
+            continue
+        if reached_steps:
+            trailing.append(line)
+        elif not intro:
+            intro = line
+        else:
+            steps.append(line)
+
+    if not intro and steps:
+        intro = steps.pop(0)
+
+    closing = " ".join(trailing).strip()
+    if not steps and not closing:
+        return intro or "\n".join(lines)
+
+    pretty_lines = []
+    if intro:
+        pretty_lines.append(intro)
+    pretty_lines.extend(f"- {step}" for step in steps[:5])
+    if closing:
+        pretty_lines.append(closing)
+    return "\n".join(pretty_lines)
 
 
 def _extract_json_object(text: str):
@@ -189,16 +265,18 @@ def _build_local_itinerary(plan, note: str = "") -> str:
     if note:
         intro = f"{intro} Reason: {note}"
 
-    return "\n".join(
-        [
-            intro,
-            "- Start with a low-pressure meetup to settle into the evening.",
-            "- Pick dinner that best matches your shared food and budget preferences.",
-            "- Do one activity that fits your overlap in mood and pace.",
-            "- Add one personal romantic touch inspired by your descriptions.",
-            "- End with a sweet stop and a calm ride or walk home.",
-            "Close by choosing one thing to repeat on your next date.",
-        ]
+    return _clean_generated_plan(
+        "\n".join(
+            [
+                intro,
+                "- Start with a low-pressure meetup to settle into the evening.",
+                "- Pick dinner that best matches your shared food and budget preferences.",
+                "- Do one activity that fits your overlap in mood and pace.",
+                "- Add one personal romantic touch inspired by your descriptions.",
+                "- End with a sweet stop and a calm ride or walk home.",
+                "Close by choosing one thing to repeat on your next date.",
+            ]
+        )
     )
 
 
@@ -243,7 +321,7 @@ def generate_date_plan(
         try:
             text = _gemini_generate(prompt, gemini_api_key)
             if text:
-                return text
+                return _clean_generated_plan(text)
             gemini_reason = "Gemini empty response"
         except Exception as exc:
             gemini_reason = _normalize_gemini_error(exc)

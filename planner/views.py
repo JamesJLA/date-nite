@@ -95,12 +95,13 @@ def _invitee_vote_link(request, plan):
     )
 
 
-def _invite_email_link(invitee_link):
-    if not invitee_link:
+def _invite_email_link(invitee_email, invitee_link):
+    if not invitee_link or not invitee_email:
         return ""
     subject = quote(INVITE_EMAIL_SUBJECT)
     body = quote(f"{INVITE_EMAIL_BODY_PREFIX}{invitee_link}")
-    return f"mailto:?subject={subject}&body={body}"
+    recipient = quote(invitee_email.strip())
+    return f"mailto:{recipient}?subject={subject}&body={body}"
 
 
 def _legacy_vote_answers(vote):
@@ -394,7 +395,7 @@ class VoteView(View):
         invite_email_link = ""
         if participant.role == Participant.INVITER:
             invitee_link = _invitee_vote_link(request, plan)
-            invite_email_link = _invite_email_link(invitee_link)
+            invite_email_link = _invite_email_link(plan.invitee_email, invitee_link)
 
         descriptions_ready = self._all_descriptions_submitted(plan)
 
